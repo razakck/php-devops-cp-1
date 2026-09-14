@@ -6,64 +6,9 @@ background-size: 100% 100%">
 <h4></h4>
 <div class="container">
   <div class="jumbotron vertical-center">
-  	<table class="grid" cellspacing="0">
-  		<tr>
-  <td colspan="4">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
-  <td colspan="4">
-  	<form method="post">
-  <div class="form-group" action="post">
-    <label for="firstname">Name:</label>
-    <input type="text" class="form-control" name="firstname">
-  </div>
-  <div class="form-group">
-    <label for="email">Email:</label>
-    <input type="text" class="form-control" name="email">
-  </div>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<button type="submit" class="btn btn-success">Submit</button>
-</form></td>  
-  <td colspan="4"></td>
-</tr>
-</table>
+  	<h2 ALIGN=CENTER>Hello world!</h2>
 </div>
 </div>
-<?php
-echo "<p>vx Hostname: " . htmlspecialchars(gethostname()) . "</p>";
-$firstname=$_POST['firstname'];
-$email=$_POST['email'];
-$servername = "aws-capstone-iac-mysql.cnoss2qc4l6r.ap-south-1.rds.amazonaws.com";
-$username = "intel";
-$password = "intel123";
-$db = "intel";
-// Create connection
-$conn = new mysqli($servername, $username, $password, $db,3306);
-
-// Check connection
-if ($conn->connect_error) {
  
-    throw new RuntimeException(
-        'Database connection failed: ' . $connection->connect_error
-    );
-}
-   
-  $table= "CREATE TABLE IF NOT EXISTS data (firstname VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL)";
-if ($conn->query($table) === TRUE) {
-    echo "Table created";
-} else {
-    echo "Error: table is failed to create" . $sql . "<br>" . $conn->error;
-}
-
-if(isset($_POST['firstname']) && isset($_POST['email'])){
-$sql = "INSERT INTO data (firstname,email)
-VALUES ('".$firstname."', '".$email."')";
-
-if ($conn->query($sql) === TRUE) {
-    echo "New record created successfully";
-} else {
-    echo "Error: " . $sql . "<br>" . $conn->error;
-}
-
-$conn->close();
-}
-?>
 </body>
 </html>
