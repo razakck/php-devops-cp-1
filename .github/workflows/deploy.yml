@@ -26,8 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer install --no-interaction --prefer-dist
-
+          composer update --no-interaction --prefer-dist
       - name: Run tests
         run: |
           vendor/bin/phpunit
