@@ -2,7 +2,14 @@
 #ubuntu update
 FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y
-
+# Install Apache and required modules
+RUN apk add --no-cache \
+    apache2 \
+    apache2-mod-rewrite \
+    apache2-mod-proxy-fcgi \
+    supervisor \
+    curl \
+    mysql-client
 # Multi-stage build for PHP application
 FROM php:8.2-fpm-alpine AS builder
 
@@ -19,14 +26,7 @@ RUN apk add --no-cache \
 # Production stage
 FROM php:8.2-fpm-alpine
 
-# Install Apache and required modules
-RUN apk add --no-cache \
-    apache2 \
-    apache2-mod-rewrite \
-    apache2-mod-proxy-fcgi \
-    supervisor \
-    curl \
-    mysql-client
+
 
 # Install PHP extensions from builder stage
 COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
