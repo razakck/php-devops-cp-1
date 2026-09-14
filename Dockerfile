@@ -1,56 +1,108 @@
-# Multi-stage build for PHP application
+# ==========================================================
+# Stage 1: PHP Extensions Builder
+# ==========================================================
+
 FROM php:8.2-fpm-alpine AS builder
 
-# Install system dependencies and PHP extensions
+# Install build dependencies
 RUN apk add --no-cache \
-    curl \
     libpng-dev \
     libjpeg-turbo-dev \
     freetype-dev \
-    mysql-client \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) gd mysqli pdo pdo_mysql
+    libzip-dev \
+    oniguruma-dev \
+    icu-dev \
+    $PHPIZE_DEPS
 
-# Production stage
+# Configure and install PHP extensions
+RUN docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        gd \
+        mysqli \
+        pdo \
+        pdo_mysql \
+        mbstring \
+        zip \
+        intl
+
+
+# ==========================================================
+# Stage 2: Production Image
+# ==========================================================
+
 FROM php:8.2-fpm-alpine
 
-# Install Apache and required modules
+# Install runtime dependencies
 RUN apk add --no-cache \
     apache2 \
-    apache2-mod-rewrite \
-    apache2-mod-proxy-fcgi \
+    apache2-proxy \
+    apache2-ssl \
     supervisor \
     curl \
-    mysql-client
+    mysql-client \
+    libpng \
+    libjpeg-turbo \
+    freetype \
+    libzip \
+    icu-libs \
+    oniguruma
 
-# Install PHP extensions from builder stage
+# Copy PHP extensions from builder
 COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
 COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
 
-# Create Apache user and set directories
-RUN mkdir -p /var/www/html /var/run/apache2 /var/log/apache2 \
-    && chown -R apache:apache /var/www/html
+# Create required directories
+RUN mkdir -p \
+    /var/www/html \
+    /run/apache2 \
+    /var/log/apache2 \
+    /var/log/php-fpm \
+    /etc/supervisor/conf.d
 
-# Copy application files
+# Copy application
 COPY . /var/www/html/
 
-# Copy PHP configuration
-RUN echo "upload_max_filesize = 100M\npost_max_size = 100M" >> /usr/local/etc/php/conf.d/uploads.ini
+# Configure PHP
+RUN printf "upload_max_filesize=100M\npost_max_size=100M\n" \
+    > /usr/local/etc/php/conf.d/uploads.ini
 
-# Apache configuration for PHP-FPM
-COPY --chown=root:root <<EOF /etc/apache2/conf.d/php-fpm.conf
-ProxyPreserveHost On
-ProxyPassMatch ^/(.*\.php(/.*)?)$ unix:/run/php-fpm.sock|fcgi://localhost/var/www/html
-ProxyPassReverse / unix:/run/php-fpm.sock|fcgi://localhost/var/www/html
-EOF
+# Configure PHP-FPM socket
+RUN sed -i 's|^listen = .*|listen = /run/php-fpm.sock|' \
+    /usr/local/etc/php-fpm.d/www.conf
+
+# Configure Apache
+RUN sed -i \
+    -e 's/^Listen 80/Listen 80/' \
+    -e 's|^DocumentRoot ".*"|DocumentRoot "/var/www/html"|' \
+    /etc/apache2/httpd.conf
 
 # Enable Apache modules
-RUN sed -i 's/^#LoadModule proxy_fcgi_module/LoadModule proxy_fcgi_module/' /etc/apache2/httpd.conf && \
-    sed -i 's/^#LoadModule rewrite_module/LoadModule rewrite_module/' /etc/apache2/httpd.conf && \
-    sed -i 's/^#LoadModule ssl_module/LoadModule ssl_module/' /etc/apache2/httpd.conf
+RUN sed -i \
+    -e 's/^#LoadModule proxy_module/LoadModule proxy_module/' \
+    -e 's/^#LoadModule proxy_fcgi_module/LoadModule proxy_fcgi_module/' \
+    -e 's/^#LoadModule rewrite_module/LoadModule rewrite_module/' \
+    /etc/apache2/httpd.conf
 
-# Supervisor configuration for process management
-COPY --chown=root:root <<EOF /etc/supervisor/conf.d/supervisord.conf
+# Apache PHP-FPM configuration
+RUN cat <<'EOF' > /etc/apache2/conf.d/php-fpm.conf
+<IfModule proxy_fcgi_module>
+    ProxyPreserveHost On
+
+    ProxyPassMatch "^/(.*\.php(/.*)?)$" \
+        "unix:/run/php-fpm.sock|fcgi://localhost/var/www/html/"
+</IfModule>
+
+<Directory "/var/www/html">
+    AllowOverride All
+    Require all granted
+    DirectoryIndex index.php index.html
+</Directory>
+EOF
+
+# Supervisor configuration
+RUN cat <<'EOF' > /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
 user=root
@@ -59,29 +111,29 @@ user=root
 command=/usr/local/sbin/php-fpm --nodaemonize
 autostart=true
 autorestart=true
-stderr_logfile=/var/log/php-fpm.log
-stdout_logfile=/var/log/php-fpm.log
+priority=10
 
 [program:apache2]
 command=/usr/sbin/httpd -DFOREGROUND
 autostart=true
 autorestart=true
-stderr_logfile=/var/log/apache2/error.log
-stdout_logfile=/var/log/apache2/access.log
+priority=20
 EOF
 
 # Set permissions
-RUN chown -R apache:apache /var/www/html \
+RUN chown -R www-data:www-data /var/www/html \
     && find /var/www/html -type d -exec chmod 755 {} \; \
-    && find /var/www/html -type f -exec chmod 644 {} \; \
-    && chmod +x /var/www/html/scripts/*.sh 2>/dev/null || true
+    && find /var/www/html -type f -exec chmod 644 {} \;
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s \
+    --timeout=10s \
+    --start-period=10s \
+    --retries=3 \
     CMD curl -f http://localhost/health.php || exit 1
 
-# Expose port
-EXPOSE 80 443
+# Expose HTTP
+EXPOSE 80
 
-# Start supervisor
+# Start Supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
