@@ -91,6 +91,7 @@ jobs:
           docker build \
             -t ${{ env.DOCKERHUB_IMAGE }}:${{ env.IMAGE_TAG }} \
             -t ${{ env.DOCKERHUB_IMAGE }}:latest \
+            .
 
       - name: Push image to Docker Hub
         run: |
