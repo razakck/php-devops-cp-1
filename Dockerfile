@@ -1,6 +1,6 @@
 # Multi-stage build for PHP application
 FROM php:8.2-fpm-alpine AS builder
-
+RUN apt-get update && apt-get install -y
 # Install system dependencies and PHP extensions
 RUN apk add --no-cache \
     curl \
