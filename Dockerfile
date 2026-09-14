@@ -26,6 +26,13 @@ RUN apk add --no-cache \
 # Production stage
 FROM php:8.2-fpm-alpine
 
+RUN apk add --no-cache apache2 \
+    && addgroup -g 82 -S apache \
+    && adduser -u 82 -S apache -G apache
+
+# Create Apache user and set directories
+RUN mkdir -p /var/www/html /var/run/apache2 /var/log/apache2 \
+    && chown -R apache:apache /var/www/html
 
 
 # Install PHP extensions from builder stage
