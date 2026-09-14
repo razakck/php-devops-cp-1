@@ -1,104 +1,47 @@
-name: Deploy PHP Application
+name: Abode CI/CD
 
 on:
   push:
     branches:
-      - main
+      - master
+      - dev
 
-permissions:
-  id-token: write
-  contents: read
-
-concurrency:
-  group: production-deployment
-  cancel-in-progress: false
-
-env:
-  AWS_REGION: ap-south-1
+  pull_request:
+    branches:
+      - master
+      - dev
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Show repository information
-        run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Repository ID: ${{ github.event.repository.id }}"
-          echo "Owner ID: ${{ github.event.repository.owner.id }}"
-        
-      - name: Checkout
+      - name: Checkout source code
         uses: actions/checkout@v4
-        
-      - name: Debug GitHub OIDC claims
-        run: |
-          TOKEN=$(curl -sS \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | jq -r '.value')
-      
-          echo "$TOKEN" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq '{
-            aud,
-            sub,
-            repository,
-            repository_id,
-            repository_owner,
-            repository_owner_id,
-            ref
-          }'
-    
-     #Role 1 
-      - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_OIDC_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      # ROLE 2
-      # Role 1 -> Deployment Role
-      - name: Assume deployment role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_CODEDEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-chaining: true
+          php-version: '8.2'
 
-      - name: Verify AWS identity
+      - name: Install dependencies
         run: |
-          aws sts get-caller-identity
-      - name: Create deployment artifact
-        run: |
-          zip -r application.zip . \
-            -x ".git/*" \
-            -x ".github/*"
+          composer install --no-interaction --prefer-dist
 
-      - name: Upload artifact to S3
-        id: artifact
+      - name: Run tests
         run: |
-          KEY="releases/${GITHUB_SHA}.zip"
-          aws s3 cp application.zip "s3://${{ secrets.DEPLOYMENT_BUCKET }}/${KEY}"
-          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
+          vendor/bin/phpunit
 
-      - name: Start CodeDeploy deployment
-        id: deploy
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Deploy application
         run: |
-          DEPLOYMENT_ID=$(aws deploy create-deployment \
-            --application-name "${{ secrets.CODEDEPLOY_APPLICATION }}" \
-            --deployment-group-name "${{ secrets.CODEDEPLOY_DEPLOYMENT_GROUP }}" \
-            --deployment-config-name "CodeDeployDefault.HalfAtATime" \
-            --description "GitHub ${GITHUB_SHA}" \
-            --s3-location bucket="${{ secrets.DEPLOYMENT_BUCKET }}",key="${{ steps.artifact.outputs.key }}",bundleType=zip \
-            --query deploymentId \
-            --output text)
-
-          echo "deployment_id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for deployment
-        run: |
-          aws deploy wait deployment-successful \
-            --deployment-id "${{ steps.deploy.outputs.deployment_id }}"
-
-      - name: Deployment summary
-        run: |
-          echo "Deployment succeeded."
-          echo "Commit: ${GITHUB_SHA}"
-          echo "Deployment: ${{ steps.deploy.outputs.deployment_id }}"
+          echo "Production deployment will be implemented here"
